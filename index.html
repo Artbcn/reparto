@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#143139">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mis Tareas">
+<title>Mis tareas · ART Apartments</title>
+
+<!--
+  ═══════════════════════════════════════════════════════════════
+  MIS TAREAS · ART Apartments (solo empleadas)
+  ───────────────────────────────────────────────────────────────
+  App aparte, solo para las empleadas de limpieza:
+  - Eligen su nombre (de la lista que carga la encargada)
+  - Ven ÚNICAMENTE las tareas que les asignaron ese día
+  - Marcan "hecho"
+  No tiene PIN, ni pantalla de encargada, ni ve cómo se reparte
+  el trabajo entre las demás — solo lo suyo.
+
+  Lee el mismo Supabase que la app de la encargada:
+  limp_parte (parte del día), dist_empleadas (lista de nombres),
+  dist_asig (quién tiene qué), limp_cierre (marcar hecho).
+  ═══════════════════════════════════════════════════════════════
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --nav:#143139; --teal:#2fae9f;
+    --cream:#f6f4ee; --line:#e7e2d6;
+    --ink:#213b42; --muted:#8a9299;
+    --green:#2f9e57; --greenbg:#dff3e6;
+    --gray:#5b6670; --graybg:#e4e6ea;
+    --blue:#2563eb; --bluebg:#e1e9fd;
+    --tealbg:#d8f1ec; --orange:#c07d22; --orangebg:#f6ecd8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);color:var(--ink);padding-bottom:env(safe-area-inset-bottom)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  header{background:var(--nav);color:#fff;padding:18px;
+    padding-top:calc(18px + env(safe-area-inset-top));position:sticky;top:0;z-index:20}
+  header .brand{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700}
+  header h1{margin:2px 0 0;font-size:20px;font-weight:800;letter-spacing:-.01em}
+  header .sub{font-size:13px;color:#b8c4c7;margin-top:2px}
+  .wrap{max-width:640px;margin:0 auto;padding:16px}
+  .err{background:#fbe3e3;color:#8a2b2b;border:1px solid #e9b3b3;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+  .btn{border:0;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;
+    font-family:inherit;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+  .btn:active{transform:translateY(1px)}
+  .btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn-green{background:var(--green);color:#fff;width:100%;padding:16px;font-size:16px}
+  .btn-sm{padding:8px 12px;font-size:13px;border-radius:10px}
+  .home-title{font-size:15px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 12px}
+  .people{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .person{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 12px;text-align:center;
+    font-size:18px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .person:active{background:var(--tealbg)}
+  .datebar{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--line);
+    border-radius:14px;padding:6px;margin-bottom:14px}
+  .datebar .d{font-weight:700;font-size:15px;text-align:center;flex:1}
+  .datebar .d small{display:block;color:var(--muted);font-weight:500;font-size:12px;text-transform:capitalize}
+  .iconbtn{background:var(--cream);border:1px solid var(--line);border-radius:10px;width:42px;height:42px;
+    font-size:20px;cursor:pointer;color:var(--ink);font-weight:700}
+  .prog{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+  .prog .lab{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:8px}
+  .prog .lab b{color:var(--ink)}
+  .bar{height:8px;background:var(--graybg);border-radius:99px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--green);border-radius:99px;transition:width .3s}
+  .task{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+  .task.done{opacity:.62}
+  .task .top{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+  .apto{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .badge{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:4px 9px;border-radius:99px;white-space:nowrap}
+  .b-llegada{background:var(--greenbg);color:var(--green)}
+  .b-salida{background:var(--graybg);color:var(--gray)}
+  .b-repaso{background:var(--bluebg);color:var(--blue)}
+  .b-toalla{background:var(--tealbg);color:#1f7d72}
+  .b-cliente{background:var(--orangebg);color:var(--orange)}
+  .b-otro{background:#efece3;color:#7a746a}
+  .task .meta{font-size:14px;color:var(--ink);margin:2px 0}
+  .task .meta .muted{color:var(--muted)}
+  .task .coment{font-size:14px;color:var(--orange);font-weight:600;margin-top:4px}
+  .task .assignrow{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .done-tag{color:var(--green);font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+  .empty{text-align:center;color:var(--muted);padding:36px 10px;font-size:15px;line-height:1.5}
+  .backlink{background:none;border:0;color:var(--teal);font-weight:700;font-size:15px;cursor:pointer;padding:4px 0;
+    margin-bottom:10px;display:inline-flex;align-items:center;gap:6px}
+  .footer{color:var(--muted);font-size:12px;text-align:center;padding:20px 0 30px}
+  .exWrap{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+  .exLbl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+  .exRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-size:13.5px}
+  .exRow.done{color:var(--green)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">ART Apartments · Limpieza</div>
+  <h1 id="hTitle">Mis tareas</h1>
+  <div class="sub" id="hSub"></div>
+</header>
+<div class="wrap" id="app"></div>
+<div class="footer">Mis tareas · ART</div>
+
+<script>
+/* ══════════════ CONFIG (misma base que la app de la encargada) ══════════════ */
+const CFG = {
+  SB_URL: "https://nevhnfkbrwwelmokspzt.supabase.co",
+  SB_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ldmhuZmticnd3ZWxtb2tzcHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MzA0NDgsImV4cCI6MjEwMDMwNjQ0OH0.fk05FBrzZZoqtBvz--jeWBWiHmbi6U-rSY4uzJXCMQY",
+  POLL_MS: 9000
+};
+let sb = null;
+try{ if (CFG.SB_URL && CFG.SB_KEY && window.supabase){ sb = window.supabase.createClient(CFG.SB_URL, CFG.SB_KEY); } }catch(e){ sb=null; }
+const SRC = Math.random().toString(36).slice(2);
+
+const state = { screen:"home", empleada:null, fecha:opToday(), empleadas:[], tasks:[], asig:{}, cierre:{}, extraTareas:{}, demo:false, error:null };
+
+/* ══════════════ DEMO (si no hay conexión) ══════════════ */
+const demoParte = { pisos:[
+    {hab:"103",tipo:"llegada",tipoLbl:"Llegada",obs:"",huesped:"Lila, Maregklen",pax:"3·0·0·0",cama:"",coment:"montar sofá cama"},
+    {hab:"207",tipo:"llegada",tipoLbl:"Llegada",obs:"",huesped:"Pasqualetti, Mirko",pax:"3·0·0·0",cama:"",coment:"montar sofá cama"}
+  ], toallas:[{hab:"107",huesped:"Stefan",hora:"11:00"}], clientes:[], fondos:[], pextras:[] };
+let demoEmp=[{id:1,nombre:"Ana"},{id:2,nombre:"Rosa"},{id:3,nombre:"Lucía"}];
+let demoAsig={"piso|103":"Ana","piso|207":"Ana","toalla|107":"Rosa"}, demoCierre={};
+
+/* ══════════════ FECHAS ══════════════ */
+function pad(n){return String(n).padStart(2,"0");}
+function toISO(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function fromISO(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
+function opToday(){const d=new Date();if(d.getHours()<5)d.setDate(d.getDate()-1);return toISO(d);}
+function addDays(s,n){const d=fromISO(s);d.setDate(d.getDate()+n);return toISO(d);}
+function prettyDate(s){const d=fromISO(s);const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+  return {dow:dias[d.getDay()], dm:pad(d.getDate())+"/"+pad(d.getMonth()+1)};}
+function hhmm(iso){if(!iso)return"";const d=new Date(iso);return pad(d.getHours())+":"+pad(d.getMinutes());}
+function esc(s){return(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ══════════════ NORMALIZAR EL PARTE ══════════════ */
+function normalize(p){
+  const t=[]; if(!p) return t;
+  (p.pisos||[]).forEach(x=>t.push({kind:"piso",base:x.hab,hab:x.hab,tipo:x.tipo,obs:x.obs,tipoLbl:x.tipoLbl,huesped:x.huesped,pax:x.pax,cama:x.cama,coment:x.coment}));
+  (p.toallas||[]).forEach(x=>t.push({kind:"toalla",base:x.hab,hab:x.hab,huesped:x.huesped,hora:x.hora}));
+  (p.clientes||[]).forEach(x=>t.push({kind:"cliente",base:x.hab,hab:x.hab,huesped:x.huesped,hora:x.hora}));
+  (p.fondos||[]).forEach(x=>t.push({kind:"fondo",base:x.hab,hab:x.hab,huesped:x.huesped,acciones:x.acciones||[]}));
+  (p.pextras||[]).forEach(x=>t.push({kind:"pextra",base:(x.id||x.hab),hab:x.hab,desc:x.desc}));
+  return t;
+}
+function keyOf(t){return t.kind+"|"+t.base;}
+function badgeFor(t){
+  if(t.kind==="piso"){ if(t.obs==="repaso")return '<span class="badge b-repaso">Repaso</span>';
+    return t.tipo==="llegada" ? '<span class="badge b-llegada">Llegada</span>' : '<span class="badge b-salida">Salida</span>'; }
+  if(t.kind==="toalla")return '<span class="badge b-toalla">Toalla</span>';
+  if(t.kind==="cliente")return '<span class="badge b-cliente">Limpieza cli.</span>';
+  if(t.kind==="diaria")return '<span class="badge b-otro">Todos los días</span>';
+  return '<span class="badge b-otro">Extra</span>';
+}
+function descFor(t){
+  if(t.kind==="piso") return (t.cama?esc(t.cama):"")+(t.pax?(t.cama?" · ":"")+esc(t.pax)+" pax":"");
+  if(t.kind==="toalla"||t.kind==="cliente") return t.hora?'<span class="mono">'+esc(t.hora)+'</span>':"";
+  if(t.kind==="fondo") return (t.acciones||[]).map(a=>esc(a.label)).join(", ");
+  if(t.kind==="pextra") return esc(t.desc||"");
+  return "";
+}
+
+/* ══════════════ CAPA DE DATOS (solo lectura de nombres/parte + marcar hecho) ══════════════ */
+async function fetchEmpleadas(){
+  if(state.demo) return demoEmp;
+  const {data,error}=await sb.from("dist_empleadas").select("id,nombre").eq("activa",true).order("orden");
+  if(error) throw error; return data||[];
+}
+async function fetchAsig(fecha){
+  if(state.demo){const m={};Object.keys(demoAsig).forEach(k=>m[k]=demoAsig[k]);return m;}
+  const {data,error}=await sb.from("dist_asig").select("taskkey,asignada").eq("fecha",fecha);
+  if(error) throw error; const m={}; (data||[]).forEach(r=>m[r.taskkey]=r.asignada); return m;
+}
+async function fetchParte(fecha){
+  if(state.demo) return demoParte;
+  const r=await sb.from("limp_parte").select("data").eq("fecha",fecha).maybeSingle();
+  return (r.data && r.data.data) || null;
+}
+async function fetchCierre(fecha){
+  if(state.demo){const m={};Object.keys(demoCierre).forEach(k=>{if(k.startsWith(fecha+"|"))m[k.slice(fecha.length+1)]=demoCierre[k];});return m;}
+  const r=await sb.from("limp_cierre").select("*").eq("fecha",fecha);
+  const m={}; (r.data||[]).forEach(c=>m[c.kind+"|"+c.hab]=c); return m;
+}
+async function setDone(fecha,kind,base,hecho){
+  const key=kind+"|"+base;
+  if(state.demo){demoCierre[fecha+"|"+key]={kind,hab:base,hecho,hecho_at:hecho?new Date().toISOString():null};return;}
+  const prev=state.cierre[key]||{};
+  const row={id:fecha+"|"+kind+"|"+base,fecha,kind,hab:base,hecho,sup:prev.sup||false,nota:prev.nota||"",src:SRC,updated_at:new Date().toISOString()};
+  const {error}=await sb.from("limp_cierre").upsert(row);
+  if(error) throw error;
+}
+/* tareas extra sueltas que la encargada agregó por apartamento (ej: descalcificar cafetera) */
+async function fetchExtraTareas(fecha){
+  if(state.demo) return {};
+  const {data,error}=await sb.from("dist_extra_tareas").select("*").eq("fecha",fecha).order("created_at");
+  if(error) throw error;
+  const m={}; (data||[]).forEach(x=>{ (m[x.hab]=m[x.hab]||[]).push(x); }); return m;
+}
+async function setExtraDone(id,hecho){
+  if(state.demo) return;
+  const {error}=await sb.from("dist_extra_tareas").update({hecho,hecho_at:hecho?new Date().toISOString():null}).eq("id",id);
+  if(error) throw error;
+}
+/* tareas diarias: se repiten todos los días, la encargada las carga una vez y siempre están */
+async function fetchDiarias(){
+  if(state.demo) return [];
+  const {data,error}=await sb.from("dist_tareas_diarias").select("id,texto").eq("activa",true).order("orden");
+  if(error) throw error;
+  return (data||[]).map(d=>({kind:"diaria",base:String(d.id),hab:d.texto}));
+}
+
+/* ══════════════ CARGA / REFRESH ══════════════ */
+async function reload(){
+  state.error=null;
+  if(!sb){ state.demo=true; }
+  try{
+    const p=await fetchParte(state.fecha);
+    state.tasks=normalize(p).concat(await fetchDiarias());
+    state.empleadas=await fetchEmpleadas();
+    state.asig=await fetchAsig(state.fecha);
+    state.cierre=await fetchCierre(state.fecha);
+    state.extraTareas=await fetchExtraTareas(state.fecha);
+  }catch(e){
+    console.error(e);
+    if(!state.demo){ state.demo=true; return reload(); }
+    state.error="No pude leer los datos.";
+  }
+  render();
+}
+
+/* ══════════════ RENDER ══════════════ */
+const app=document.getElementById("app"),hTitle=document.getElementById("hTitle"),hSub=document.getElementById("hSub");
+function render(){ state.screen==="home" ? render_home() : render_empleada(); }
+function banner(){
+  let h="";
+  if(state.demo)h+='<div class="err" style="background:#f6ecd8;color:#7a5310;border-color:#e6cf9a">Modo demo — sin conexión con Supabase.</div>';
+  if(state.error)h+='<div class="err">'+esc(state.error)+'</div>';
+  return h;
+}
+function dateBar(){
+  const p=prettyDate(state.fecha),isToday=state.fecha===opToday();
+  return '<div class="datebar"><button class="iconbtn" data-act="prev">‹</button>'+
+    '<div class="d">'+p.dm+'<small>'+p.dow+(isToday?' · hoy':'')+'</small></div>'+
+    '<button class="iconbtn" data-act="next">›</button></div>';
+}
+function render_home(){
+  hTitle.textContent="Mis tareas"; hSub.textContent="Elegí tu nombre";
+  const people=state.empleadas.map(e=>'<button class="person" data-act="pick" data-name="'+esc(e.nombre)+'">'+esc(e.nombre)+'</button>').join("");
+  app.innerHTML=banner()+
+    '<div class="home-title">¿Quién sos?</div>'+
+    (state.empleadas.length?'<div class="people">'+people+'</div>':
+      '<div class="empty">Todavía no hay nombres cargados.<br>Avisale a tu encargada para que te agregue.</div>');
+}
+function extraTareasHtml(t){
+  if(t.kind!=="piso") return "";
+  const items=state.extraTareas[t.hab]||[];
+  if(!items.length) return "";
+  return '<div class="exWrap">'+
+    '<div class="exLbl">Tareas extra para este apto</div>'+
+    items.map(x=>'<div class="exRow'+(x.hecho?' done':'')+'">'+
+      '<span>'+(x.hecho?'✓ ':'')+esc(x.texto)+'</span>'+
+      '<button class="btn btn-ghost btn-sm" data-act="'+(x.hecho?'exundo':'exdone')+'" data-id="'+esc(x.id)+'">'+(x.hecho?'Deshacer':'Marcar')+'</button>'+
+    '</div>').join('')+
+  '</div>';
+}
+function taskCard(t){
+  const c=state.cierre[keyOf(t)],done=!!(c&&c.hecho),d=descFor(t);
+  return '<div class="task'+(done?' done':'')+'"><div class="top">'+
+    '<span class="apto">'+esc(t.hab||"—")+'</span>'+badgeFor(t)+'</div>'+
+    (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
+    (d?'<div class="meta">'+d+'</div>':'')+
+    (t.coment?'<div class="coment">⚠ '+esc(t.coment)+'</div>':'')+
+    '<div class="assignrow">'+
+      (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.hecho_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
+           :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
+    '</div>'+extraTareasHtml(t)+'</div>';
+}
+function render_empleada(){
+  hTitle.textContent="Hola, "+state.empleada; hSub.textContent="Tus tareas";
+  const mine=state.tasks.filter(t=>(state.asig[keyOf(t)]||"")===state.empleada);
+  const pend=mine.filter(t=>!(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].hecho));
+  const done=mine.filter(t=>(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].hecho));
+  let list = !mine.length ? '<div class="empty">No tenés tareas asignadas para este día. 🎉</div>'
+    : pend.map(taskCard).join("")+done.map(taskCard).join("");
+  app.innerHTML=banner()+
+    '<button class="backlink" data-act="home">‹ Cambiar de persona</button>'+dateBar()+
+    (mine.length?'<div class="prog"><div class="lab"><span>Te quedan <b>'+pend.length+'</b> de '+mine.length+'</span><span>'+done.length+' hechas</span></div>'+
+      '<div class="bar"><i style="width:'+(mine.length?Math.round(done.length/mine.length*100):0)+'%"></i></div></div>':'')+list;
+}
+
+/* ══════════════ EVENTOS ══════════════ */
+app.addEventListener("click",async ev=>{
+  const el=ev.target.closest("[data-act]"); if(!el)return;
+  const act=el.dataset.act;
+  if(act==="pick"){state.empleada=el.dataset.name;state.screen="empleada";state.fecha=opToday();await reload();return;}
+  if(act==="home"){state.screen="home";state.empleada=null;state.error=null;await reload();return;}
+  if(act==="prev"){state.fecha=addDays(state.fecha,-1);await reload();return;}
+  if(act==="next"){state.fecha=addDays(state.fecha,1);await reload();return;}
+  if(act==="done"){try{await setDone(state.fecha,el.dataset.k,el.dataset.b,true);}catch(e){state.error="No pude guardar.";}await reload();return;}
+  if(act==="undo"){try{await setDone(state.fecha,el.dataset.k,el.dataset.b,false);}catch(e){state.error="No pude guardar.";}await reload();return;}
+  if(act==="exdone"){try{await setExtraDone(el.dataset.id,true);}catch(e){state.error="No pude guardar.";}await reload();return;}
+  if(act==="exundo"){try{await setExtraDone(el.dataset.id,false);}catch(e){state.error="No pude guardar.";}await reload();return;}
+});
+
+/* ══════════════ SYNC ══════════════ */
+setInterval(()=>{if(state.screen==="empleada")reload();},CFG.POLL_MS);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.screen==="empleada")reload();});
+
+/* ══════════════ ARRANQUE ══════════════ */
+reload();
+</script>
+</body>
+</html>
