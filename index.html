@@ -186,11 +186,11 @@ async function fetchCierre(fecha){
   const r=await sb.from("limp_cierre").select("*").eq("fecha",fecha);
   const m={}; (r.data||[]).forEach(c=>m[c.kind+"|"+c.hab]=c); return m;
 }
-async function setDone(fecha,kind,base,hecho){
+async function setDone(fecha,kind,base,declarado){
   const key=kind+"|"+base;
-  if(state.demo){demoCierre[fecha+"|"+key]={kind,hab:base,hecho,hecho_at:hecho?new Date().toISOString():null};return;}
+  if(state.demo){demoCierre[fecha+"|"+key]={kind,hab:base,declarado,declarado_at:declarado?new Date().toISOString():null};return;}
   const prev=state.cierre[key]||{};
-  const row={id:fecha+"|"+kind+"|"+base,fecha,kind,hab:base,hecho,sup:prev.sup||false,nota:prev.nota||"",src:SRC,updated_at:new Date().toISOString()};
+  const row={id:fecha+"|"+kind+"|"+base,fecha,kind,hab:base,declarado,declarado_at:declarado?new Date().toISOString():null,hecho:prev.hecho||false,sup:prev.sup||false,nota:prev.nota||"",src:SRC,updated_at:new Date().toISOString()};
   const {error}=await sb.from("limp_cierre").upsert(row);
   if(error) throw error;
 }
@@ -269,22 +269,22 @@ function extraTareasHtml(t){
   '</div>';
 }
 function taskCard(t){
-  const c=state.cierre[keyOf(t)],done=!!(c&&c.hecho),d=descFor(t);
+  const c=state.cierre[keyOf(t)],done=!!(c&&c.declarado),d=descFor(t);
   return '<div class="task'+(done?' done':'')+'"><div class="top">'+
     '<span class="apto">'+esc(t.hab||"—")+'</span>'+badgeFor(t)+'</div>'+
     (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
     (d?'<div class="meta">'+d+'</div>':'')+
     (t.coment?'<div class="coment">⚠ '+esc(t.coment)+'</div>':'')+
     '<div class="assignrow">'+
-      (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.hecho_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
+      (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.declarado_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
            :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
     '</div>'+extraTareasHtml(t)+'</div>';
 }
 function render_empleada(){
   hTitle.textContent="Hola, "+state.empleada; hSub.textContent="Tus tareas";
   const mine=state.tasks.filter(t=>(state.asig[keyOf(t)]||"")===state.empleada);
-  const pend=mine.filter(t=>!(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].hecho));
-  const done=mine.filter(t=>(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].hecho));
+  const pend=mine.filter(t=>!(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
+  const done=mine.filter(t=>(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
   let list = !mine.length ? '<div class="empty">No tenés tareas asignadas para este día. 🎉</div>'
     : pend.map(taskCard).join("")+done.map(taskCard).join("");
   app.innerHTML=banner()+
