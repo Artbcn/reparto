@@ -97,6 +97,29 @@
   .exRow.done{color:var(--green)}
   .syncBanner{background:var(--orange,#c07d22);color:#3a2a05;text-align:center;padding:10px;font-weight:700;
     cursor:pointer;border-radius:12px;margin-bottom:14px;display:none}
+  .addExtraBtn{width:100%;margin-top:6px;background:#fff;border:1px dashed var(--teal);color:var(--teal)}
+  .myExtras{margin-top:18px}
+  .myExtras .exLbl{margin-bottom:8px}
+  .myExtraCard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .myExtraCard .txt{font-size:14px;color:var(--ink);margin-bottom:6px}
+  .myExtraCard .apto{font-size:12px;color:var(--muted);margin-bottom:4px}
+  .myExtraCard .pics{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+  .myExtraCard .pics img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+  .estado-tag{font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px;display:inline-block}
+  .estado-pend{background:var(--orangebg);color:var(--orange)}
+  .estado-sup{background:var(--greenbg);color:var(--green)}
+  .modalBg{position:fixed;inset:0;background:rgba(20,49,57,.55);display:none;align-items:flex-end;justify-content:center;z-index:50}
+  .modalBg.open{display:flex}
+  .modalCard{background:#fff;border-radius:18px 18px 0 0;padding:18px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto}
+  .modalCard h3{margin:0 0 12px;font-size:17px}
+  .modalCard label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px}
+  .modalCard input[type=text],.modalCard textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:14px}
+  .modalCard textarea{min-height:70px;resize:vertical}
+  .fotoPreviewRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .fotoPreviewRow img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+  .modalBtns{display:flex;gap:8px;margin-top:16px}
+  .modalBtns .btn{flex:1}
+  .uploadHint{font-size:12px;color:var(--muted);margin-top:4px}
 </style>
 </head>
 <body>
@@ -107,6 +130,24 @@
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer">Mis tareas · ART</div>
+<div class="modalBg" id="exModalBg">
+  <div class="modalCard">
+    <h3>Algo que hiciste de más</h3>
+    <label>Apartamento (opcional)</label>
+    <input type="text" id="exApto" placeholder="ej: 302">
+    <label>¿Qué hiciste?</label>
+    <textarea id="exTexto" placeholder="ej: repuse rollos de papel, saqué una mancha de la pared..."></textarea>
+    <label>Fotos (opcional)</label>
+    <input type="file" id="exFotos" accept="image/*" capture="environment" multiple>
+    <div class="uploadHint">Podés sacar varias fotos o elegirlas de la galería.</div>
+    <div class="fotoPreviewRow" id="exPreview"></div>
+    <div class="err" id="exErr" style="display:none"></div>
+    <div class="modalBtns">
+      <button class="btn btn-ghost" id="exCancel">Cancelar</button>
+      <button class="btn btn-green" id="exGuardar">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ══════════════ CONFIG (misma base que la app de la encargada) ══════════════ */
@@ -119,7 +160,7 @@ let sb = null;
 try{ if (CFG.SB_URL && CFG.SB_KEY && window.supabase){ sb = window.supabase.createClient(CFG.SB_URL, CFG.SB_KEY); } }catch(e){ sb=null; }
 const SRC = Math.random().toString(36).slice(2);
 
-const state = { screen:"home", empleada:null, fecha:opToday(), empleadas:[], tasks:[], asig:{}, cierre:{}, extraTareas:{}, demo:false, error:null, syncPending:false };
+const state = { screen:"home", empleada:null, fecha:opToday(), empleadas:[], tasks:[], asig:{}, cierre:{}, extraTareas:{}, misExtras:[], demo:false, error:null, syncPending:false };
 
 /* ══════════════ DEMO (si no hay conexión) ══════════════ */
 const demoParte = { pisos:[
@@ -208,6 +249,34 @@ async function setExtraDone(id,hecho){
   const {error}=await sb.from("dist_extra_tareas").update({hecho,hecho_at:hecho?new Date().toISOString():null}).eq("id",id);
   if(error) throw error;
 }
+/* tareas extra que la PROPIA empleada reporta (algo que hizo de más, no pedido en el parte), con fotos */
+async function fetchMisExtras(fecha,empleada){
+  if(state.demo) return [];
+  const {data,error}=await sb.from("limp_cierre").select("*").eq("fecha",fecha).eq("kind","extra").eq("empleada",empleada).order("updated_at",{ascending:false});
+  if(error) throw error;
+  return data||[];
+}
+async function subirFotosExtra(files){
+  if(!sb || !files || !files.length) return [];
+  const urls=[];
+  for(const file of files){
+    const path=`extra/${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${file.name.replace(/[^a-zA-Z0-9.]/g,"_")}`;
+    const {error}=await sb.storage.from("limp-fotos").upload(path,file,{cacheControl:"3600",upsert:false});
+    if(error) throw error;
+    const {data}=sb.storage.from("limp-fotos").getPublicUrl(path);
+    if(data && data.publicUrl) urls.push(data.publicUrl);
+  }
+  return urls;
+}
+async function submitMiExtra(fecha,empleada,apto,texto,files){
+  const fotos=await subirFotosExtra(files);
+  const id=fecha+"|extra|"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+  const row={id,fecha,kind:"extra",hab:apto||"",nota:texto,fotos,declarado:true,declarado_at:new Date().toISOString(),
+    hecho:false,sup:false,empleada,src:SRC,updated_at:new Date().toISOString()};
+  if(state.demo){ demoCierre[id]=row; return; }
+  const {error}=await sb.from("limp_cierre").insert(row);
+  if(error) throw error;
+}
 /* tareas diarias: se repiten todos los días, la encargada las carga una vez y siempre están */
 async function fetchDiarias(){
   if(state.demo) return [];
@@ -227,6 +296,7 @@ async function reload(){
     state.asig=await fetchAsig(state.fecha);
     state.cierre=await fetchCierre(state.fecha);
     state.extraTareas=await fetchExtraTareas(state.fecha);
+    if(state.empleada) state.misExtras=await fetchMisExtras(state.fecha,state.empleada);
   }catch(e){
     console.error(e);
     if(!state.demo){ state.demo=true; return reload(); }
@@ -283,6 +353,21 @@ function taskCard(t){
            :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
     '</div>'+extraTareasHtml(t)+'</div>';
 }
+function myExtrasHtml(){
+  const h='<button class="btn addExtraBtn" data-act="openExtra">📷 Agregar algo que hiciste de más</button>';
+  if(!state.misExtras.length) return h;
+  const cards=state.misExtras.map(x=>{
+    const pics=(x.fotos||[]).map(u=>'<img src="'+esc(u)+'" onclick="window.open(this.src,\'_blank\')">').join('');
+    const estado=x.sup?'<span class="estado-tag estado-sup">✓ Supervisado</span>':'<span class="estado-tag estado-pend">Pendiente de supervisión</span>';
+    return '<div class="myExtraCard">'+
+      (x.hab?'<div class="apto">Apto '+esc(x.hab)+'</div>':'')+
+      '<div class="txt">'+esc(x.nota||'')+'</div>'+
+      (pics?'<div class="pics">'+pics+'</div>':'')+
+      estado+
+    '</div>';
+  }).join('');
+  return h+'<div class="myExtras"><div class="exLbl">Lo que reportaste hoy</div>'+cards+'</div>';
+}
 function render_empleada(){
   hTitle.textContent="Hola, "+state.empleada; hSub.textContent="Tus tareas";
   const mine=state.tasks.filter(t=>(state.asig[keyOf(t)]||"")===state.empleada);
@@ -293,7 +378,7 @@ function render_empleada(){
   app.innerHTML=banner()+
     '<button class="backlink" data-act="home">‹ Cambiar de persona</button>'+dateBar()+
     (mine.length?'<div class="prog"><div class="lab"><span>Te quedan <b>'+pend.length+'</b> de '+mine.length+'</span><span>'+done.length+' hechas</span></div>'+
-      '<div class="bar"><i style="width:'+(mine.length?Math.round(done.length/mine.length*100):0)+'%"></i></div></div>':'')+list;
+      '<div class="bar"><i style="width:'+(mine.length?Math.round(done.length/mine.length*100):0)+'%"></i></div></div>':'')+list+myExtrasHtml();
 }
 
 /* ══════════════ EVENTOS ══════════════ */
@@ -309,11 +394,47 @@ app.addEventListener("click",async ev=>{
   if(act==="undo"){try{await setDone(state.fecha,el.dataset.k,el.dataset.b,false);}catch(e){state.error="No pude guardar.";}await reload();return;}
   if(act==="exdone"){try{await setExtraDone(el.dataset.id,true);}catch(e){state.error="No pude guardar.";}await reload();return;}
   if(act==="exundo"){try{await setExtraDone(el.dataset.id,false);}catch(e){state.error="No pude guardar.";}await reload();return;}
+  if(act==="openExtra"){openExtraModal();return;}
 });
 
 /* ══════════════ SYNC ══════════════ */
 setInterval(()=>{if(state.screen==="empleada")reload();},CFG.POLL_MS);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.screen==="empleada")reload();});
+
+/* ══════════════ MODAL "algo que hice de más" (con fotos) ══════════════ */
+const exModalBg=document.getElementById("exModalBg"),exApto=document.getElementById("exApto"),
+  exTexto=document.getElementById("exTexto"),exFotos=document.getElementById("exFotos"),
+  exPreview=document.getElementById("exPreview"),exErr=document.getElementById("exErr"),
+  exGuardar=document.getElementById("exGuardar"),exCancel=document.getElementById("exCancel");
+function openExtraModal(){
+  exApto.value=""; exTexto.value=""; exFotos.value=""; exPreview.innerHTML=""; exErr.style.display="none";
+  exGuardar.disabled=false; exGuardar.textContent="Guardar";
+  exModalBg.classList.add("open");
+}
+function closeExtraModal(){ exModalBg.classList.remove("open"); }
+exCancel.addEventListener("click",closeExtraModal);
+exModalBg.addEventListener("click",ev=>{ if(ev.target===exModalBg) closeExtraModal(); });
+exFotos.addEventListener("change",()=>{
+  exPreview.innerHTML="";
+  Array.from(exFotos.files||[]).forEach(f=>{
+    const url=URL.createObjectURL(f);
+    const img=document.createElement("img"); img.src=url; exPreview.appendChild(img);
+  });
+});
+exGuardar.addEventListener("click",async()=>{
+  const texto=exTexto.value.trim();
+  if(!texto){ exErr.textContent="Contá qué hiciste."; exErr.style.display="block"; return; }
+  exErr.style.display="none"; exGuardar.disabled=true; exGuardar.textContent="Guardando...";
+  try{
+    await submitMiExtra(state.fecha,state.empleada,exApto.value.trim(),texto,exFotos.files);
+    closeExtraModal();
+    await reload();
+  }catch(e){
+    console.error(e);
+    exErr.textContent="No pude guardar. Probá de nuevo."; exErr.style.display="block";
+    exGuardar.disabled=false; exGuardar.textContent="Guardar";
+  }
+});
 
 /* aviso en vivo si la encargada/otra empleada actualiza el parte o marca algo */
 function subscribeRealtime(){
