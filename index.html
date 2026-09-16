@@ -343,6 +343,7 @@ function extraTareasHtml(t){
 }
 function taskCard(t){
   const c=state.cierre[keyOf(t)],done=!!(c&&c.declarado),d=descFor(t);
+  const habExtraBtn=t.hab?'<button class="btn btn-ghost btn-sm" data-act="addExtraHab" data-hab="'+esc(t.hab)+'">📷 Anotar algo extra acá</button>':"";
   return '<div class="task'+(done?' done':'')+'"><div class="top">'+
     '<span class="apto">'+esc(t.hab||"—")+'</span>'+badgeFor(t)+'</div>'+
     (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
@@ -351,7 +352,7 @@ function taskCard(t){
     '<div class="assignrow">'+
       (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.declarado_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
            :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
-    '</div>'+extraTareasHtml(t)+'</div>';
+    '</div>'+(habExtraBtn?'<div class="assignrow">'+habExtraBtn+'</div>':'')+extraTareasHtml(t)+'</div>';
 }
 function myExtrasHtml(){
   const h='<button class="btn addExtraBtn" data-act="openExtra">📷 Agregar algo que hiciste de más</button>';
@@ -370,7 +371,7 @@ function myExtrasHtml(){
 }
 function render_empleada(){
   hTitle.textContent="Hola, "+state.empleada; hSub.textContent="Tus tareas";
-  const mine=state.tasks.filter(t=>(state.asig[keyOf(t)]||"")===state.empleada);
+  const mine=state.tasks.filter(t=>{const a=state.asig[keyOf(t)]||"";return a===state.empleada||a==="__TODAS__";});
   const pend=mine.filter(t=>!(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
   const done=mine.filter(t=>(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
   let list = !mine.length ? '<div class="empty">No tenés tareas asignadas para este día. 🎉</div>'
@@ -395,6 +396,7 @@ app.addEventListener("click",async ev=>{
   if(act==="exdone"){try{await setExtraDone(el.dataset.id,true);}catch(e){state.error="No pude guardar.";}await reload();return;}
   if(act==="exundo"){try{await setExtraDone(el.dataset.id,false);}catch(e){state.error="No pude guardar.";}await reload();return;}
   if(act==="openExtra"){openExtraModal();return;}
+  if(act==="addExtraHab"){openExtraModal(el.dataset.hab);return;}
 });
 
 /* ══════════════ SYNC ══════════════ */
@@ -406,8 +408,8 @@ const exModalBg=document.getElementById("exModalBg"),exApto=document.getElementB
   exTexto=document.getElementById("exTexto"),exFotos=document.getElementById("exFotos"),
   exPreview=document.getElementById("exPreview"),exErr=document.getElementById("exErr"),
   exGuardar=document.getElementById("exGuardar"),exCancel=document.getElementById("exCancel");
-function openExtraModal(){
-  exApto.value=""; exTexto.value=""; exFotos.value=""; exPreview.innerHTML=""; exErr.style.display="none";
+function openExtraModal(presetHab){
+  exApto.value=presetHab||""; exTexto.value=""; exFotos.value=""; exPreview.innerHTML=""; exErr.style.display="none";
   exGuardar.disabled=false; exGuardar.textContent="Guardar";
   exModalBg.classList.add("open");
 }
