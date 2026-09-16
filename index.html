@@ -95,6 +95,8 @@
   .exLbl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
   .exRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-size:13.5px}
   .exRow.done{color:var(--green)}
+  .syncBanner{background:var(--orange,#c07d22);color:#3a2a05;text-align:center;padding:10px;font-weight:700;
+    cursor:pointer;border-radius:12px;margin-bottom:14px;display:none}
 </style>
 </head>
 <body>
@@ -117,7 +119,7 @@ let sb = null;
 try{ if (CFG.SB_URL && CFG.SB_KEY && window.supabase){ sb = window.supabase.createClient(CFG.SB_URL, CFG.SB_KEY); } }catch(e){ sb=null; }
 const SRC = Math.random().toString(36).slice(2);
 
-const state = { screen:"home", empleada:null, fecha:opToday(), empleadas:[], tasks:[], asig:{}, cierre:{}, extraTareas:{}, demo:false, error:null };
+const state = { screen:"home", empleada:null, fecha:opToday(), empleadas:[], tasks:[], asig:{}, cierre:{}, extraTareas:{}, demo:false, error:null, syncPending:false };
 
 /* ══════════════ DEMO (si no hay conexión) ══════════════ */
 const demoParte = { pisos:[
@@ -238,6 +240,7 @@ const app=document.getElementById("app"),hTitle=document.getElementById("hTitle"
 function render(){ state.screen==="home" ? render_home() : render_empleada(); }
 function banner(){
   let h="";
+  if(state.syncPending)h+='<div class="syncBanner" style="display:block" data-act="sync">🔄 Tu compañera actualizó el parte — tocá para actualizar</div>';
   if(state.demo)h+='<div class="err" style="background:#f6ecd8;color:#7a5310;border-color:#e6cf9a">Modo demo — sin conexión con Supabase.</div>';
   if(state.error)h+='<div class="err">'+esc(state.error)+'</div>';
   return h;
@@ -297,6 +300,7 @@ function render_empleada(){
 app.addEventListener("click",async ev=>{
   const el=ev.target.closest("[data-act]"); if(!el)return;
   const act=el.dataset.act;
+  if(act==="sync"){state.syncPending=false;await reload();return;}
   if(act==="pick"){state.empleada=el.dataset.name;state.screen="empleada";state.fecha=opToday();await reload();return;}
   if(act==="home"){state.screen="home";state.empleada=null;state.error=null;await reload();return;}
   if(act==="prev"){state.fecha=addDays(state.fecha,-1);await reload();return;}
@@ -310,6 +314,31 @@ app.addEventListener("click",async ev=>{
 /* ══════════════ SYNC ══════════════ */
 setInterval(()=>{if(state.screen==="empleada")reload();},CFG.POLL_MS);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.screen==="empleada")reload();});
+
+/* aviso en vivo si la encargada/otra empleada actualiza el parte o marca algo */
+function subscribeRealtime(){
+  if(!sb) return;
+  try{
+    sb.channel("emp_parte").on("postgres_changes",{event:"*",schema:"public",table:"limp_parte"},payload=>{
+      const row=payload.new||payload.old||{};
+      if(row.fecha===state.fecha){state.syncPending=true;render();}
+    }).subscribe();
+  }catch(e){}
+  try{
+    sb.channel("emp_cierre").on("postgres_changes",{event:"*",schema:"public",table:"limp_cierre"},payload=>{
+      const row=payload.new||payload.old||{};
+      if(row.src===SRC) return;
+      if(row.fecha===state.fecha && state.screen==="empleada") reload();
+    }).subscribe();
+  }catch(e){}
+  try{
+    sb.channel("emp_asig").on("postgres_changes",{event:"*",schema:"public",table:"dist_asig"},payload=>{
+      const row=payload.new||payload.old||{};
+      if(String(row.fecha)===state.fecha && state.screen==="empleada") reload();
+    }).subscribe();
+  }catch(e){}
+}
+subscribeRealtime();
 
 /* ══════════════ ARRANQUE ══════════════ */
 reload();
