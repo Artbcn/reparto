@@ -197,7 +197,7 @@ function badgeFor(t){
     return t.tipo==="llegada" ? '<span class="badge b-llegada">Llegada</span>' : '<span class="badge b-salida">Salida</span>'; }
   if(t.kind==="toalla")return '<span class="badge b-toalla">Toalla</span>';
   if(t.kind==="cliente")return '<span class="badge b-cliente">Limpieza cli.</span>';
-  if(t.kind==="diaria")return '<span class="badge b-otro">Todos los días</span>';
+  if(t.kind==="diaria")return '<span class="badge b-otro">Zona común</span>';
   return '<span class="badge b-otro">Extra</span>';
 }
 function descFor(t){
@@ -280,9 +280,9 @@ async function submitMiExtra(fecha,empleada,apto,texto,files){
 /* tareas diarias: se repiten todos los días, la encargada las carga una vez y siempre están */
 async function fetchDiarias(){
   if(state.demo) return [];
-  const {data,error}=await sb.from("dist_tareas_diarias").select("id,texto,por_apto").eq("activa",true).order("orden");
+  const {data,error}=await sb.from("dist_tareas_diarias").select("id,texto,por_apto,tareas").eq("activa",true).order("orden");
   if(error) throw error;
-  return (data||[]).filter(d=>!d.por_apto).map(d=>({kind:"diaria",base:String(d.id),hab:d.texto}));
+  return (data||[]).filter(d=>!d.por_apto).map(d=>({kind:"diaria",base:String(d.id),hab:d.texto,tareas:Array.isArray(d.tareas)?d.tareas:[]}));
 }
 async function fetchDiariasPorApto(){
   if(state.demo) return [];
@@ -381,6 +381,7 @@ function taskCard(t){
     (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
     (d?'<div class="meta">'+d+'</div>':'')+
     (t.coment?'<div class="coment">⚠ '+esc(t.coment)+'</div>':'')+
+    ((t.tareas&&t.tareas.length)?'<div class="exWrap"><div class="exLbl">Qué hay que hacer</div>'+t.tareas.map(x=>'<div class="exRow"><span>• '+esc(x)+'</span></div>').join('')+'</div>':'')+
     '<div class="assignrow">'+
       (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.declarado_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
            :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
