@@ -77,11 +77,22 @@
   .apto{font-size:22px;font-weight:800;letter-spacing:-.02em}
   .badge{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:4px 9px;border-radius:99px;white-space:nowrap}
   .b-llegada{background:var(--greenbg);color:var(--green)}
-  .b-salida{background:var(--graybg);color:var(--gray)}
+  .b-salida{background:#fbe0dc;color:#b3261e}
+  .b-fondo{background:#ece2f7;color:#6b3fa0}
+  .b-pextra{background:#fbefc2;color:#8a6500}
   .b-repaso{background:var(--bluebg);color:var(--blue)}
   .b-toalla{background:var(--tealbg);color:#1f7d72}
   .b-cliente{background:var(--orangebg);color:var(--orange)}
   .b-otro{background:#efece3;color:#7a746a}
+  .trow{border-radius:12px;padding:10px 12px;margin-top:8px;border-left:6px solid #cfcabd;background:#f4f1ea}
+  .trow.k-llegada{background:#e6f5ec;border-left-color:#1E8C4E}
+  .trow.k-salida{background:#fdecea;border-left-color:#d9473d}
+  .trow.k-repaso{background:#e8f0fc;border-left-color:#2c5db0}
+  .trow.k-toalla{background:#e0f4f1;border-left-color:#1f9d8f}
+  .trow.k-cliente{background:#fdf0dc;border-left-color:#e08a1e}
+  .trow.k-fondo{background:#f1e9fa;border-left-color:#7b4cb8}
+  .trow.k-pextra{background:#fff6d6;border-left-color:#d9a800}
+  .trow.done{opacity:.6}
   .task .meta{font-size:14px;color:var(--ink);margin:2px 0}
   .task .meta .muted{color:var(--muted)}
   .task .coment{font-size:14px;color:var(--orange);font-weight:600;margin-top:4px}
@@ -198,6 +209,8 @@ function badgeFor(t){
   if(t.kind==="toalla")return '<span class="badge b-toalla">Toalla</span>';
   if(t.kind==="cliente")return '<span class="badge b-cliente">Limpieza cli.</span>';
   if(t.kind==="diaria")return '<span class="badge b-otro">Zona común</span>';
+  if(t.kind==="fondo")return '<span class="badge b-fondo">Limpieza de fondo</span>';
+  if(t.kind==="pextra")return '<span class="badge b-pextra">Extra</span>';
   return '<span class="badge b-otro">Extra</span>';
 }
 function descFor(t){
@@ -375,7 +388,8 @@ function diariaAptoHtml(t){
 }
 function taskRow(t){
   const c=state.cierre[keyOf(t)],done=!!(c&&c.declarado),d=descFor(t);
-  return '<div class="trow'+(done?' done':'')+'" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px">'+
+  const kc=t.kind==="piso"?(t.obs==="repaso"?"repaso":(t.tipo==="llegada"?"llegada":"salida")):t.kind;
+  return '<div class="trow k-'+kc+(done?' done':'')+'">'+
     '<div class="top" style="margin-bottom:2px">'+badgeFor(t)+'</div>'+
     (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
     (d?'<div class="meta">'+d+'</div>':'')+
