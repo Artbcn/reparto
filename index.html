@@ -373,11 +373,10 @@ function diariaAptoHtml(t){
     }).join('')+
   '</div>';
 }
-function taskCard(t){
+function taskRow(t){
   const c=state.cierre[keyOf(t)],done=!!(c&&c.declarado),d=descFor(t);
-  const habExtraBtn=t.hab?'<button class="btn btn-ghost btn-sm" data-act="addExtraHab" data-hab="'+esc(t.hab)+'">📷 Anotar algo extra acá</button>':"";
-  return '<div class="task'+(done?' done':'')+'"><div class="top">'+
-    '<span class="apto">'+esc(t.hab||"—")+'</span>'+badgeFor(t)+'</div>'+
+  return '<div class="trow'+(done?' done':'')+'" style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px">'+
+    '<div class="top" style="margin-bottom:2px">'+badgeFor(t)+'</div>'+
     (t.huesped?'<div class="meta"><span class="muted">Huésped:</span> '+esc(t.huesped)+'</div>':'')+
     (d?'<div class="meta">'+d+'</div>':'')+
     (t.coment?'<div class="coment">⚠ '+esc(t.coment)+'</div>':'')+
@@ -385,7 +384,24 @@ function taskCard(t){
     '<div class="assignrow">'+
       (done?'<span class="done-tag">✓ Hecho '+hhmm(c&&c.declarado_at)+'</span><button class="btn btn-ghost btn-sm" data-act="undo" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Deshacer</button>'
            :'<button class="btn btn-green" data-act="done" data-k="'+t.kind+'" data-b="'+esc(t.base)+'">Marcar hecho</button>')+
-    '</div>'+(habExtraBtn?'<div class="assignrow">'+habExtraBtn+'</div>':'')+diariaAptoHtml(t)+extraTareasHtml(t)+'</div>';
+    '</div></div>';
+}
+/* una sola tarjeta por apartamento, con todas sus tareas adentro */
+function groupTasks(list){
+  const order=[],map={};
+  list.forEach(t=>{const g=t.hab?("h|"+t.hab):("k|"+keyOf(t)); if(!map[g]){map[g]={hab:t.hab,tasks:[]};order.push(g);} map[g].tasks.push(t);});
+  return order.map(g=>map[g]);
+}
+function groupDone(g){return g.tasks.every(t=>{const c=state.cierre[keyOf(t)];return !!(c&&c.declarado);});}
+function aptCard(g){
+  const done=groupDone(g), hab=g.hab;
+  const habExtraBtn=hab?'<button class="btn btn-ghost btn-sm" data-act="addExtraHab" data-hab="'+esc(hab)+'">📷 Anotar algo extra acá</button>':"";
+  const pisoT=g.tasks.find(t=>t.kind==="piso")||{kind:"piso",hab:hab};
+  const ctxT=hab?{kind:"piso",hab:hab}:pisoT;
+  return '<div class="task'+(done?' done':'')+'"><div class="top"><span class="apto">'+esc(hab||"—")+'</span></div>'+
+    g.tasks.map(taskRow).join('')+
+    (habExtraBtn?'<div class="assignrow" style="margin-top:8px">'+habExtraBtn+'</div>':'')+
+    (hab?diariaAptoHtml(ctxT)+extraTareasHtml(ctxT):'')+'</div>';
 }
 function myExtrasHtml(){
   const h='<button class="btn addExtraBtn" data-act="openExtra">📷 Agregar algo que hiciste de más</button>';
@@ -408,7 +424,7 @@ function render_empleada(){
   const pend=mine.filter(t=>!(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
   const done=mine.filter(t=>(state.cierre[keyOf(t)]&&state.cierre[keyOf(t)].declarado));
   let list = !mine.length ? '<div class="empty">No tenés tareas asignadas para este día. 🎉</div>'
-    : pend.map(taskCard).join("")+done.map(taskCard).join("");
+    : (()=>{const gs=groupTasks(mine);return gs.filter(g=>!groupDone(g)).map(aptCard).join("")+gs.filter(groupDone).map(aptCard).join("");})();
   app.innerHTML=banner()+
     '<button class="backlink" data-act="home">‹ Cambiar de persona</button>'+dateBar()+
     (mine.length?'<div class="prog"><div class="lab"><span>Te quedan <b>'+pend.length+'</b> de '+mine.length+'</span><span>'+done.length+' hechas</span></div>'+
