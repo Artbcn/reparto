@@ -246,7 +246,8 @@ async function setDone(fecha,kind,base,declarado){
   const key=kind+"|"+base;
   if(state.demo){demoCierre[fecha+"|"+key]={kind,hab:base,declarado,declarado_at:declarado?new Date().toISOString():null};return;}
   const prev=state.cierre[key]||{};
-  const row={id:fecha+"|"+kind+"|"+base,fecha,kind,hab:base,declarado,declarado_at:declarado?new Date().toISOString():null,hecho:prev.hecho||false,sup:prev.sup||false,nota:prev.nota||"",src:SRC,updated_at:new Date().toISOString()};
+  /* solo declarado: no pisa hecho/nota que cambió la encargada desde otra pantalla */
+  const row={id:fecha+"|"+kind+"|"+base,fecha,kind,hab:base,declarado,declarado_at:declarado?new Date().toISOString():null,src:SRC,updated_at:new Date().toISOString()};
   const {error}=await sb.from("limp_cierre").upsert(row);
   if(error) throw error;
 }
