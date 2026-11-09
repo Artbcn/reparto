@@ -536,5 +536,36 @@ subscribeRealtime();
 /* ══════════════ ARRANQUE ══════════════ */
 reload();
 </script>
+<script>
+/* pwaAutoUpdate: detecta versión nueva de la app. Si la pestaña está en segundo plano y no estás escribiendo, se recarga sola; si no, avisa con un botón. */
+(function(){
+  var base = null, banner = null;
+  function hash(s){ var x = 0; for (var i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) | 0; return x + ':' + s.length; }
+  async function get(fresh){
+    var r = await fetch(location.pathname + (fresh ? '?_v=' + Date.now() : ''), fresh ? { cache: 'no-store' } : {});
+    return r.ok ? await r.text() : null;
+  }
+  function typing(){ var a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
+  function show(){
+    if (document.hidden && !typing()){ location.reload(); return; }
+    if (banner) return;
+    banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#14323b;color:#fff;border-radius:12px;padding:10px 14px;font:600 14px system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.3);display:flex;gap:12px;align-items:center;max-width:92vw';
+    banner.innerHTML = '<span>🔄 Hay una versión nueva de la app</span><button style="background:#17a398;color:#fff;border:0;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Actualizar</button>';
+    banner.querySelector('button').onclick = function(){ location.reload(); };
+    document.body.appendChild(banner);
+  }
+  async function check(){
+    try{
+      if (base === null){ var t0 = await get(false); if (t0) base = hash(t0); }
+      var t = await get(true); if (!t || base === null) return;
+      if (hash(t) !== base) show();
+    }catch(e){}
+  }
+  setTimeout(check, 4000);
+  setInterval(check, 120000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) check(); });
+})();
+</script>
 </body>
 </html>
